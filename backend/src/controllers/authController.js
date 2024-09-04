@@ -4,6 +4,8 @@ const User = require('../models/user');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const speakeasy = require('speakeasy');
+const qrcode = require('qrcode');
 const logger = require('../config/logger');
 const sendEmail = require('../utils/sendEmail');
 
@@ -33,29 +35,7 @@ exports.register = async (req, res) => {
       role: role || 'student' // Default role is student
     });
 
-    // Generate email confirmation token
-    const confirmationToken = user.generateEmailConfirmToken();
-
     await user.save();
-
-    // Create confirmation URL
-    const confirmationUrl = `${req.protocol}://${req.get('host')}/api/v1/auth/confirmemail/${confirmationToken}`;
-
-    // Send confirmation email
-    try {
-      await sendEmail({
-        email: user.email,
-        subject: 'Email Confirmation',
-        message: `Please click on the following link to confirm your email: \n\n ${confirmationUrl}`
-      });
-
-      logger.info(`Confirmation email sent to: ${user.email}`);
-    } catch (err) {
-      logger.error(`Email send error: ${err.message}`);
-      user.confirmEmailToken = undefined;
-      await user.save({ validateBeforeSave: false });
-      return res.status(500).json({ message: 'Email could not be sent' });
-    }
 
     const token = generateToken(user._id);
 
@@ -76,37 +56,6 @@ exports.register = async (req, res) => {
   }
 };
 
-// Confirm Email
-exports.confirmEmail = async (req, res) => {
-  try {
-    // Get hashed token
-    const confirmEmailToken = crypto
-      .createHash('sha256')
-      .update(req.params.confirmtoken)
-      .digest('hex');
-
-    const user = await User.findOne({
-      confirmEmailToken,
-      isEmailConfirmed: false
-    });
-
-    if (!user) {
-      return res.status(400).json({ message: 'Invalid or expired token' });
-    }
-
-    // Set email as confirmed
-    user.isEmailConfirmed = true;
-    user.confirmEmailToken = undefined;
-    await user.save({ validateBeforeSave: false });
-
-    logger.info(`Email confirmed for user: ${user.email}`);
-    res.status(200).json({ success: true, message: 'Email confirmed successfully' });
-  } catch (error) {
-    logger.error(`Email confirmation error: ${error.message}`);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-};
-
 // Login user
 exports.login = async (req, res) => {
   try {
@@ -122,6 +71,15 @@ exports.login = async (req, res) => {
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Check if 2FA is enabled
+    if (user.isTwoFactorEnabled) {
+      return res.status(200).json({
+        success: true,
+        twoFactorRequired: true,
+        userId: user._id
+      });
     }
 
     const token = generateToken(user._id);
@@ -311,6 +269,129 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
-// Add other functions (2FA, OAuth, etc.) as needed...
+// Confirm Email
+exports.confirmEmail = async (req, res) => {
+  try {
+    // Get hashed token
+    const confirmEmailToken = crypto
+      .createHash('sha256')
+      .update(req.params.confirmtoken)
+      .digest('hex');
+
+    const user = await User.findOne({
+      confirmEmailToken,
+      isEmailConfirmed: false
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired token' });
+    }
+
+    // Set email as confirmed
+    user.isEmailConfirmed = true;
+    user.confirmEmailToken = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    logger.info(`Email confirmed for user: ${user.email}`);
+    res.status(200).json({ success: true, message: 'Email confirmed successfully' });
+  } catch (error) {
+    logger.error(`Email confirmation error: ${error.message}`);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Generate 2FA
+exports.generate2FA = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    // Generate secret
+    const secret = speakeasy.generateSecret({ length: 32 });
+
+    // Save secret to user
+    user.twoFactorSecret = secret.base32;
+    user.isTwoFactorEnabled = false;
+    await user.save();
+
+    // Generate QR code
+    const otpauth_url = speakeasy.otpauthURL({
+      secret: secret.ascii,
+      label: `HMS:${user.email}`,
+      issuer: 'HMS'
+    });
+
+    const qr_code = await qrcode.toDataURL(otpauth_url);
+
+    res.json({
+      success: true,
+      secret: secret.base32,
+      qr_code
+    });
+  } catch (error) {
+    logger.error(`Generate 2FA error: ${error.message}`);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Verify 2FA
+exports.verify2FA = async (req, res) => {
+  try {
+    const { userId, token } = req.body;
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const verified = speakeasy.totp.verify({
+      secret: user.twoFactorSecret,
+      encoding: 'base32',
+      token: token
+    });
+
+    if (!verified) {
+      return res.status(400).json({ message: 'Invalid token' });
+    }
+
+    user.isTwoFactorEnabled = true;
+    await user.save();
+
+    const jwtToken = generateToken(user._id);
+
+    res.json({
+      success: true,
+      token: jwtToken,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    logger.error(`Verify 2FA error: ${error.message}`);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Disable 2FA
+exports.disable2FA = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    user.twoFactorSecret = undefined;
+    user.isTwoFactorEnabled = false;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: '2FA disabled successfully'
+    });
+  } catch (error) {
+    logger.error(`Disable 2FA error: ${error.message}`);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
 
 module.exports = exports;

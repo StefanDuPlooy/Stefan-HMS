@@ -11,7 +11,6 @@
     "test:coverage": "jest --coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
-    
   },
   "keywords": [
     "education",
@@ -39,7 +38,9 @@
     "morgan": "^1.10.0",
     "multer": "^1.4.3",
     "nodemailer": "^6.6.3",
+    "qrcode": "^1.5.4",
     "redis": "^3.1.2",
+    "speakeasy": "^2.0.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "winston": "^3.3.3",
