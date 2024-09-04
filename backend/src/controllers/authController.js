@@ -1,4 +1,4 @@
-// backend/src/controllers/authContoller.js
+// backend/src/controllers/authController.js
 
 const User = require('../models/user');
 const jwt = require('jsonwebtoken');
@@ -88,6 +88,20 @@ exports.login = async (req, res) => {
     logger.error(`Login error: ${error.message}`);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
+};
+
+// Logout user
+exports.logout = (req, res) => {
+  res.cookie('token', 'none', {
+    expires: new Date(Date.now() + 10 * 1000), // 10 seconds
+    httpOnly: true
+  });
+  
+  logger.info(`User logged out`);
+  res.status(200).json({
+    success: true,
+    message: 'User logged out successfully'
+  });
 };
 
 // Get current logged in user
@@ -185,16 +199,21 @@ exports.forgotPassword = async (req, res) => {
 
     try {
       await sendEmail({
-        to: user.email,
-        subject: 'Password Reset',
-        text: 'Here is your password reset token',
-        html: `<p>Here is your password reset token: ${resetToken}</p>`
+        email: user.email,
+        subject: 'Password reset token',
+        message
       });
-      
-      res.status(200).json({ success: true, message: 'Email sent' });
-    } catch (error) {
-      // Handle error
-      res.status(500).json({ success: false, message: 'Email could not be sent' });
+
+      logger.info(`Password reset email sent to: ${user.email}`);
+      res.json({ success: true, data: 'Email sent' });
+    } catch (err) {
+      logger.error(`Email send error: ${err.message}`);
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+
+      await user.save({ validateBeforeSave: false });
+
+      return res.status(500).json({ message: 'Email could not be sent' });
     }
   } catch (error) {
     logger.error(`Forgot password error: ${error.message}`);
