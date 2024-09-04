@@ -33,7 +33,29 @@ exports.register = async (req, res) => {
       role: role || 'student' // Default role is student
     });
 
+    // Generate email confirmation token
+    const confirmationToken = user.generateEmailConfirmToken();
+
     await user.save();
+
+    // Create confirmation URL
+    const confirmationUrl = `${req.protocol}://${req.get('host')}/api/v1/auth/confirmemail/${confirmationToken}`;
+
+    // Send confirmation email
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'Email Confirmation',
+        message: `Please click on the following link to confirm your email: \n\n ${confirmationUrl}`
+      });
+
+      logger.info(`Confirmation email sent to: ${user.email}`);
+    } catch (err) {
+      logger.error(`Email send error: ${err.message}`);
+      user.confirmEmailToken = undefined;
+      await user.save({ validateBeforeSave: false });
+      return res.status(500).json({ message: 'Email could not be sent' });
+    }
 
     const token = generateToken(user._id);
 
@@ -50,6 +72,37 @@ exports.register = async (req, res) => {
     });
   } catch (error) {
     logger.error(`Registration error: ${error.message}`);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Confirm Email
+exports.confirmEmail = async (req, res) => {
+  try {
+    // Get hashed token
+    const confirmEmailToken = crypto
+      .createHash('sha256')
+      .update(req.params.confirmtoken)
+      .digest('hex');
+
+    const user = await User.findOne({
+      confirmEmailToken,
+      isEmailConfirmed: false
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired token' });
+    }
+
+    // Set email as confirmed
+    user.isEmailConfirmed = true;
+    user.confirmEmailToken = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    logger.info(`Email confirmed for user: ${user.email}`);
+    res.status(200).json({ success: true, message: 'Email confirmed successfully' });
+  } catch (error) {
+    logger.error(`Email confirmation error: ${error.message}`);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -257,3 +310,7 @@ exports.resetPassword = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
+// Add other functions (2FA, OAuth, etc.) as needed...
+
+module.exports = exports;
