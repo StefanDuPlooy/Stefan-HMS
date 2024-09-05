@@ -203,4 +203,70 @@ exports.getPublicProfile = async (req, res) => {
   }
 };
 
+// Get current user
+exports.getCurrentUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    res.status(200).json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    logger.error(`Error in getCurrentUser: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Update current user
+exports.updateCurrentUser = async (req, res) => {
+  try {
+    const fieldsToUpdate = {
+      username: req.body.username,
+      email: req.body.email,
+      // Add any other fields that are allowed to be updated
+    };
+
+    const user = await User.findByIdAndUpdate(req.user.id, fieldsToUpdate, {
+      new: true,
+      runValidators: true
+    }).select('-password');
+
+    res.status(200).json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    logger.error(`Error in updateCurrentUser: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Get current user's courses
+exports.getCurrentUserCourses = async (req, res) => {
+  try {
+    const courses = await Course.find({ students: req.user.id });
+    res.status(200).json({
+      success: true,
+      data: courses
+    });
+  } catch (error) {
+    logger.error(`Error in getCurrentUserCourses: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Get current user's assignments
+exports.getCurrentUserAssignments = async (req, res) => {
+  try {
+    const assignments = await Assignment.find({ student: req.user.id });
+    res.status(200).json({
+      success: true,
+      data: assignments
+    });
+  } catch (error) {
+    logger.error(`Error in getCurrentUserAssignments: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = exports;

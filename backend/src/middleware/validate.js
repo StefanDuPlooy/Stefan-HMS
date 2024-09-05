@@ -3,6 +3,7 @@
 const { validationResult } = require('express-validator');
 const { AppError } = require('./error');
 const logger = require('../config/logger');
+const { check } = require('express-validator');
 
 /**
  * Middleware to validate request data based on specified rules
@@ -89,8 +90,16 @@ const customRules = {
   // Add more custom validation rules as needed
 };
 
-module.exports = {
-  validate,
-  sanitizeRequest,
-  customRules
-};
+exports.updateUserRules = [
+  check('username')
+    .optional()
+    .isLength({ min: 3, max: 30 })
+    .withMessage('Username must be between 3 and 30 characters'),
+  check('email')
+    .optional()
+    .isEmail()
+    .withMessage('Please include a valid email'),
+  // Add any other fields that are allowed to be updated
+];
+
+module.exports = exports;
