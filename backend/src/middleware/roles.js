@@ -1,4 +1,4 @@
-// backend/src/middlewares/roles.js
+// backend/src/middleware/roles.js
 
 const { AppError } = require('./error');
 const logger = require('../config/logger');

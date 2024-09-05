@@ -1,4 +1,4 @@
-// backend/src/middlewares/validate.js
+// backend/src/middleware/validate.js
 
 const { validationResult } = require('express-validator');
 const { AppError } = require('./error');
@@ -103,3 +103,10 @@ exports.updateUserRules = [
 ];
 
 module.exports = exports;
+
+module.exports = {
+  validate,
+  sanitizeRequest,
+  sanitize,
+  customRules
+};
