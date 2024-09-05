@@ -269,4 +269,66 @@ exports.getCurrentUserAssignments = async (req, res) => {
   }
 };
 
+// Create a new user (admin only)
+exports.createUser = async (req, res) => {
+  try {
+    const { username, email, password, role } = req.body;
+    const user = await User.create({
+      username,
+      email,
+      password,
+      role
+    });
+
+    res.status(201).json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    logger.error(`Error in createUser: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Change user role (admin only)
+exports.changeUserRole = async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(req.params.id, { role: req.body.role }, {
+      new: true,
+      runValidators: true
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    logger.error(`Error in changeUserRole: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Get user activity
+exports.getUserActivity = async (req, res) => {
+  try {
+    const submissions = await Submission.find({ student: req.params.id }).sort('-createdAt').limit(10);
+    const assignments = await Assignment.find({ createdBy: req.params.id }).sort('-createdAt').limit(10);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        recentSubmissions: submissions,
+        recentAssignments: assignments
+      }
+    });
+  } catch (error) {
+    logger.error(`Error in getUserActivity: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = exports;
