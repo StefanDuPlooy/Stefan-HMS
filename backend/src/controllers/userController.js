@@ -178,3 +178,29 @@ exports.getUserStats = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
+// Get public profile of a user
+exports.getPublicProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('-password -email');
+    
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: user._id,
+        username: user.username,
+        role: user.role,
+        // Add any other public fields you want to expose
+      }
+    });
+  } catch (error) {
+    logger.error(`Error in getPublicProfile: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+module.exports = exports;
