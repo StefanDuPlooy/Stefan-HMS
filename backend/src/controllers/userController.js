@@ -331,4 +331,88 @@ exports.getUserActivity = async (req, res) => {
   }
 };
 
+// Bulk create users
+exports.bulkCreateUsers = async (req, res) => {
+  try {
+    const users = req.body.users;
+    if (!Array.isArray(users) || users.length === 0) {
+      return res.status(400).json({ success: false, message: 'Invalid input: users should be a non-empty array' });
+    }
+
+    const createdUsers = await User.insertMany(users, { rawResult: true });
+
+    logger.info(`Bulk created ${createdUsers.insertedCount} users`);
+    res.status(201).json({
+      success: true,
+      data: {
+        insertedCount: createdUsers.insertedCount,
+        users: createdUsers.ops
+      }
+    });
+  } catch (error) {
+    logger.error(`Error in bulkCreateUsers: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Bulk update users
+exports.bulkUpdateUsers = async (req, res) => {
+  try {
+    const updates = req.body.updates;
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ success: false, message: 'Invalid input: updates should be a non-empty array' });
+    }
+
+    const bulkOps = updates.map(update => ({
+      updateOne: {
+        filter: { _id: update.userId },
+        update: { $set: update.data },
+        upsert: false
+      }
+    }));
+
+    const result = await User.bulkWrite(bulkOps);
+
+    logger.info(`Bulk updated ${result.modifiedCount} users`);
+    res.status(200).json({
+      success: true,
+      data: {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount,
+        upsertedCount: result.upsertedCount
+      }
+    });
+  } catch (error) {
+    logger.error(`Error in bulkUpdateUsers: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Bulk delete users
+exports.bulkDeleteUsers = async (req, res) => {
+  try {
+    const userIds = req.body.userIds;
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'Invalid input: userIds should be a non-empty array' });
+    }
+
+    const result = await User.deleteMany({ _id: { $in: userIds } });
+
+    // Delete associated data
+    await Assignment.deleteMany({ createdBy: { $in: userIds } });
+    await Submission.deleteMany({ student: { $in: userIds } });
+
+    logger.info(`Bulk deleted ${result.deletedCount} users`);
+    res.status(200).json({
+      success: true,
+      data: {
+        deletedCount: result.deletedCount
+      }
+    });
+  } catch (error) {
+    logger.error(`Error in bulkDeleteUsers: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = exports;
