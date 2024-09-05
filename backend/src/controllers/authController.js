@@ -72,7 +72,7 @@ exports.login = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-
+    
     // Check if 2FA is enabled
     if (user.isTwoFactorEnabled) {
       return res.status(200).json({
@@ -391,6 +391,40 @@ exports.disable2FA = async (req, res) => {
   } catch (error) {
     logger.error(`Disable 2FA error: ${error.message}`);
     res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Delete account
+exports.deleteAccount = async (req, res) => {
+  try {
+    await User.findByIdAndDelete(req.user.id);
+    logger.info(`User account deleted: ${req.user.id}`);
+    res.status(200).json({ success: true, message: 'User account deleted successfully' });
+  } catch (error) {
+    logger.error(`Delete account error: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Error deleting user account', error: error.message });
+  }
+};
+
+// Request data export
+exports.requestDataExport = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    
+    // Here you would typically start a background job to gather and package the user's data
+    // For this example, we'll just send a confirmation email
+
+    await sendEmail({
+      email: user.email,
+      subject: 'Data Export Request Received',
+      message: 'Your request for a data export has been received. We will process your request and send you the data export soon.'
+    });
+
+    logger.info(`Data export requested for user: ${req.user.id}`);
+    res.status(200).json({ success: true, message: 'Data export request received. You will receive an email with your data soon.' });
+  } catch (error) {
+    logger.error(`Request data export error: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Error processing data export request', error: error.message });
   }
 };
 
