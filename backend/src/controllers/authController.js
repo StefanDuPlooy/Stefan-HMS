@@ -428,4 +428,63 @@ exports.requestDataExport = async (req, res) => {
   }
 };
 
+// New Session Management Functions
+
+// Get all active sessions for a user
+exports.getSessions = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Assuming we store sessions in the user document
+    const sessions = user.sessions || [];
+
+    res.status(200).json({ success: true, data: sessions });
+  } catch (error) {
+    logger.error(`Get sessions error: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Error fetching sessions', error: error.message });
+  }
+};
+
+// Revoke a specific session
+exports.revokeSession = async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Filter out the revoked session
+    user.sessions = user.sessions.filter(session => session.id !== sessionId);
+    await user.save();
+
+    res.status(200).json({ success: true, message: 'Session revoked successfully' });
+  } catch (error) {
+    logger.error(`Revoke session error: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Error revoking session', error: error.message });
+  }
+};
+
+// Revoke all sessions for a user
+exports.revokeAllSessions = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Clear all sessions
+    user.sessions = [];
+    await user.save();
+
+    res.status(200).json({ success: true, message: 'All sessions revoked successfully' });
+  } catch (error) {
+    logger.error(`Revoke all sessions error: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Error revoking all sessions', error: error.message });
+  }
+};
+
 module.exports = exports;
