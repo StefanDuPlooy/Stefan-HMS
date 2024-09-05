@@ -58,11 +58,11 @@ router.post('/2fa/verify', auth, authController.verify2FA);
 router.post('/2fa/disable', auth, authController.disable2FA);
 
 // OAuth routes
-router.get('/google', authController.googleAuth);
-router.get('/google/callback', authController.googleAuthCallback);
+// router.get('/google', authController.googleAuth);
+// router.get('/google/callback', authController.googleAuthCallback);
 
-router.get('/facebook', authController.facebookAuth);
-router.get('/facebook/callback', authController.facebookAuthCallback);
+// router.get('/facebook', authController.facebookAuth);
+// router.get('/facebook/callback', authController.facebookAuthCallback);
 
 // Account management
 router.delete('/deleteaccount', auth, authController.deleteAccount);
