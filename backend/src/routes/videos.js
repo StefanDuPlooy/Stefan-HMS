@@ -132,11 +132,11 @@ router.get('/assignment/:assignmentId',
   videoController.getVideosForAssignment
 );
 
-// Bulk operations (admin only)
-router.post('/bulk/delete',
-  auth,
-  authorize('admin'),
-  videoController.bulkDeleteVideos
-);
+  // Bulk operations (admin only)
+  router.post('/bulk/delete',
+    auth,
+    authorize('admin'),
+    videoController.bulkDeleteVideos
+  );
 
 module.exports = router;

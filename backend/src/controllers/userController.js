@@ -415,4 +415,132 @@ exports.bulkDeleteUsers = async (req, res) => {
   }
 };
 
+// Get stats on user roles
+exports.getUserRoleStats = async (req, res) => {
+  try {
+    const roleCounts = await User.aggregate([
+      { $group: { _id: '$role', count: { $sum: 1 } } }
+    ]);
+
+    const roleStats = roleCounts.reduce((acc, curr) => {
+      acc[curr._id] = curr.count;
+      return acc;
+    }, {});
+
+    res.status(200).json({
+      success: true,
+      data: roleStats
+    });
+  } catch (error) {
+    logger.error(`Error in getUserRoleStats: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Get user activity stats
+exports.getUserActivityStats = async (req, res) => {
+  try {
+    const lastMonth = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    
+    const activeUsers = await User.countDocuments({ lastLogin: { $gte: lastMonth } });
+    
+    const submissionStats = await Submission.aggregate([
+      { $match: { createdAt: { $gte: lastMonth } } },
+      { $group: {
+        _id: null,
+        totalSubmissions: { $sum: 1 },
+        uniqueStudents: { $addToSet: '$student' }
+      } }
+    ]);
+
+    const assignmentStats = await Assignment.aggregate([
+      { $match: { createdAt: { $gte: lastMonth } } },
+      { $group: {
+        _id: null,
+        totalAssignments: { $sum: 1 },
+        uniqueLecturers: { $addToSet: '$createdBy' }
+      } }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        activeUsersLastMonth: activeUsers,
+        submissionsLastMonth: submissionStats[0]?.totalSubmissions || 0,
+        uniqueStudentsSubmittedLastMonth: submissionStats[0]?.uniqueStudents.length || 0,
+        assignmentsCreatedLastMonth: assignmentStats[0]?.totalAssignments || 0,
+        uniqueLecturersCreatedAssignmentsLastMonth: assignmentStats[0]?.uniqueLecturers.length || 0
+      }
+    });
+  } catch (error) {
+    logger.error(`Error in getUserActivityStats: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Search users
+exports.searchUsers = async (req, res) => {
+  try {
+    const { query } = req.query;
+    if (!query) {
+      return res.status(400).json({ success: false, message: 'Search query is required' });
+    }
+
+    const users = await User.find({
+      $or: [
+        { username: { $regex: query, $options: 'i' } },
+        { email: { $regex: query, $options: 'i' } },
+        { firstName: { $regex: query, $options: 'i' } },
+        { lastName: { $regex: query, $options: 'i' } }
+      ]
+    }).select('-password');
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      data: users
+    });
+  } catch (error) {
+    logger.error(`Error in searchUsers: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Filter users
+exports.filterUsers = async (req, res) => {
+  try {
+    const { role, createdAt, lastLogin } = req.query;
+    let query = {};
+
+    if (role) {
+      query.role = role;
+    }
+
+    if (createdAt) {
+      const [start, end] = createdAt.split(',');
+      query.createdAt = {};
+      if (start) query.createdAt.$gte = new Date(start);
+      if (end) query.createdAt.$lte = new Date(end);
+    }
+
+    if (lastLogin) {
+      const [start, end] = lastLogin.split(',');
+      query.lastLogin = {};
+      if (start) query.lastLogin.$gte = new Date(start);
+      if (end) query.lastLogin.$lte = new Date(end);
+    }
+
+    const users = await User.find(query).select('-password');
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      data: users
+    });
+  } catch (error) {
+    logger.error(`Error in filterUsers: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = exports;

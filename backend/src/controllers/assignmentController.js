@@ -167,3 +167,210 @@ exports.getAssignmentSubmissions = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+exports.getAssignmentStats = async (req, res) => {
+  try {
+    const assignmentId = req.params.id;
+    const assignment = await Assignment.findById(assignmentId);
+    
+    if (!assignment) {
+      return res.status(404).json({ success: false, message: 'Assignment not found' });
+    }
+
+    // Get all submissions for this assignment
+    const submissions = await Submission.find({ assignment: assignmentId });
+
+    // Calculate statistics
+    const totalSubmissions = submissions.length;
+    const gradedSubmissions = submissions.filter(sub => sub.grade !== undefined).length;
+    const pendingSubmissions = totalSubmissions - gradedSubmissions;
+    
+    let averageGrade = 0;
+    if (gradedSubmissions > 0) {
+      const totalGrade = submissions.reduce((sum, sub) => sum + (sub.grade || 0), 0);
+      averageGrade = totalGrade / gradedSubmissions;
+    }
+
+    const lateSubmissions = submissions.filter(sub => sub.isLate).length;
+
+    // Get total number of students enrolled in the course
+    const course = await User.countDocuments({ enrolledCourses: assignment.course });
+
+    const submissionRate = (totalSubmissions / course) * 100;
+
+    const stats = {
+      totalSubmissions,
+      gradedSubmissions,
+      pendingSubmissions,
+      averageGrade: averageGrade.toFixed(2),
+      lateSubmissions,
+      submissionRate: submissionRate.toFixed(2) + '%',
+      totalStudents: course
+    };
+
+    res.status(200).json({
+      success: true,
+      data: stats
+    });
+
+  } catch (error) {
+    logger.error(`Error in getAssignmentStats: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+exports.getAssignmentsByCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const assignments = await Assignment.find({ course: courseId })
+      .populate('course', 'name')
+      .sort('-createdAt');
+
+    if (!assignments) {
+      return res.status(404).json({ success: false, message: 'No assignments found for this course' });
+    }
+
+    res.status(200).json({
+      success: true,
+      count: assignments.length,
+      data: assignments
+    });
+  } catch (error) {
+    logger.error(`Error in getAssignmentsByCourse: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+exports.extendDeadline = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newDeadline } = req.body;
+
+    if (!newDeadline) {
+      return res.status(400).json({ success: false, message: 'New deadline is required' });
+    }
+
+    const assignment = await Assignment.findById(id);
+
+    if (!assignment) {
+      return res.status(404).json({ success: false, message: 'Assignment not found' });
+    }
+
+    // Check if the new deadline is after the current deadline
+    if (new Date(newDeadline) <= new Date(assignment.dueDate)) {
+      return res.status(400).json({ success: false, message: 'New deadline must be after the current deadline' });
+    }
+
+    assignment.dueDate = newDeadline;
+    await assignment.save();
+
+    logger.info(`Deadline extended for assignment ${id} to ${newDeadline}`);
+
+    res.status(200).json({
+      success: true,
+      data: assignment
+    });
+  } catch (error) {
+    logger.error(`Error in extendDeadline: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+exports.publishAssignment = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const assignment = await Assignment.findById(id);
+
+    if (!assignment) {
+      return res.status(404).json({ success: false, message: 'Assignment not found' });
+    }
+
+    if (assignment.status === 'published') {
+      return res.status(400).json({ success: false, message: 'Assignment is already published' });
+    }
+
+    assignment.status = 'published';
+    await assignment.save();
+
+    logger.info(`Assignment ${id} has been published`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Assignment has been published successfully',
+      data: assignment
+    });
+  } catch (error) {
+    logger.error(`Error in publishAssignment: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+exports.unpublishAssignment = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const assignment = await Assignment.findById(id);
+
+    if (!assignment) {
+      return res.status(404).json({ success: false, message: 'Assignment not found' });
+    }
+
+    if (assignment.status !== 'published') {
+      return res.status(400).json({ success: false, message: 'Assignment is not currently published' });
+    }
+
+    assignment.status = 'draft';
+    await assignment.save();
+
+    logger.info(`Assignment ${id} has been unpublished`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Assignment has been unpublished successfully',
+      data: assignment
+    });
+  } catch (error) {
+    logger.error(`Error in unpublishAssignment: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+exports.cloneAssignment = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const originalAssignment = await Assignment.findById(id);
+
+    if (!originalAssignment) {
+      return res.status(404).json({ success: false, message: 'Original assignment not found' });
+    }
+
+    // Create a new assignment object with properties from the original
+    const newAssignment = new Assignment({
+      title: `Copy of ${originalAssignment.title}`,
+      description: originalAssignment.description,
+      course: originalAssignment.course,
+      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Set due date to one week from now
+      totalPoints: originalAssignment.totalPoints,
+      submissionType: originalAssignment.submissionType,
+      createdBy: req.user.id,
+      status: 'draft'
+    });
+
+    await newAssignment.save();
+
+    logger.info(`Assignment ${id} has been cloned. New assignment ID: ${newAssignment._id}`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Assignment has been cloned successfully',
+      data: newAssignment
+    });
+  } catch (error) {
+    logger.error(`Error in cloneAssignment: ${error.message}`);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+module.exports = exports;

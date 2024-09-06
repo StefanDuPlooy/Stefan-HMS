@@ -2,9 +2,10 @@
 
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
+const path = require('path');
 
 // Load env vars
-dotenv.config({ path: './config/config.env' });
+dotenv.config({ path: path.join(__dirname, '..', 'config', 'config.env') });
 
 const app = require('./app');
 const logger = require('./config/logger');
@@ -19,9 +20,7 @@ process.on('uncaughtException', (err) => {
 // Connect to database
 mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
-  useUnifiedTopology: true,
-  useCreateIndex: true,
-  useFindAndModify: false
+  useUnifiedTopology: true
 }).then(() => logger.info('MongoDB connected...'))
   .catch(err => {
     logger.error('MongoDB connection error:', err);
