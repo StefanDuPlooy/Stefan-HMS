@@ -3,9 +3,21 @@
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 const path = require('path');
+const fs = require('fs');
 
 // Load env vars
-dotenv.config({ path: path.join(__dirname, '..', 'config', 'config.env') });
+const envPath = path.join(__dirname, 'config', 'config.env');
+console.log('Attempting to load environment variables from:', envPath);
+
+if (fs.existsSync(envPath)) {
+  console.log('config.env file found');
+  dotenv.config({ path: envPath });
+} else {
+  console.log('config.env file not found');
+}
+
+console.log('MONGODB_URI:', process.env.MONGODB_URI);
+console.log('NODE_ENV:', process.env.NODE_ENV);
 
 const app = require('./app');
 const logger = require('./config/logger');
