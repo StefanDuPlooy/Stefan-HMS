@@ -5,6 +5,8 @@ const mongoose = require('mongoose');
 const path = require('path');
 const fs = require('fs');
 
+mongoose.set('strictQuery', false);
+
 // Load env vars
 const envPath = path.join(__dirname, 'config', 'config.env');
 console.log('Attempting to load environment variables from:', envPath);
